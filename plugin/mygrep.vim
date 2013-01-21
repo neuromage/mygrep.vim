@@ -19,7 +19,7 @@ function! MyGrepReplaceAll()
     call MyGrepReplace()
     silent! cnext
   endfor
-endfunction!
+endfunction
 
 function! MyGrepReplaceNext()
   if !GrepHasRun()
