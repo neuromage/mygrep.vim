@@ -1,105 +1,110 @@
 " TODO: Move these mappings elsewhere.
-nnoremap <silent> <Leader>gg :set operatorfunc=MyGrepOperator<CR>g@
-vnoremap <silent> <Leader>gg :<C-u>call MyGrepOperator(visualmode())<CR>
+nnoremap <silent> <Leader>gg :set operatorfunc=<SID>MyGrepOperator<CR>g@
+vnoremap <silent> <Leader>gg :<C-u>call <SID>MyGrepOperator(visualmode())<CR>
 
+nnoremap <silent> ]g :call <SID>MyGrepReplaceNext()<CR>
+nnoremap <silent> [g :call <SID>MyGrepReplacePrevious()<CR>
+nnoremap <silent> <Leader>gr :call <SID>SetNewGrepString()<CR>
+nnoremap <silent> <Leader>ga :call <SID>MyGrepReplaceAll()<CR>
+nnoremap <silent> <Leader>r :call <SID>MyGrepReplace()<CR>
 
-nnoremap <silent> ]g :call MyGrepReplaceNext()<CR>
-nnoremap <silent> [g :call MyGrepReplacePrevious()<CR>
-nnoremap <silent> <Leader>gr :call SetNewGrepString()<CR>
-nnoremap <silent> <Leader>ga :call MyGrepReplaceAll()<CR>
-nnoremap <silent> <Leader>r :call MyGrepReplace()<CR>
-
-function! MyGrepReplaceAll()
-  if !GrepHasRun()
+function! s:MyGrepReplaceAll()
+  if !<SID>GrepHasRun()
     return
   endif
 
   silent! cc 1
-  for item in g:grepped_items_list
-    call MyGrepReplace()
-    silent! cnext
+  for item in s:grepped_items_list
+    try
+      call <SID>MyGrepReplace()
+      silent! cnext
+    catch /^Vim:Interrupt$/
+      let l:maybe_quit = input("Quit? (y/n) > ")
+      if l:maybe_quit ==? 'y'
+        break
+      endif
+    endtry
   endfor
 endfunction
 
-function! MyGrepReplaceNext()
-  if !GrepHasRun()
+function! s:MyGrepReplaceNext()
+  if !<SID>GrepHasRun()
     return
   endif
 
   silent! cnext
-  call MyGrepReplace()
+  call <SID>MyGrepReplace()
 endfunction
 
-function! MyGrepReplacePrevious()
-  if !GrepHasRun()
+function! s:MyGrepReplacePrevious()
+  if !<SID>GrepHasRun()
     return
   endif
 
   silent! cprev
-  call MyGrepReplace()
+  call <SID>MyGrepReplace()
 endfunction
 
-function! MyGrepOperator(type)
+function! s:MyGrepOperator(type)
   let l:current_buffer = winnr()
   if a:type ==# 'char'
     silent execute "normal! `[v`]y"
   elseif a:type ==# 'v'
     silent execute "normal! `<v`>y"
   endif
-  let g:current_grep_str = @@
+  let s:current_grep_str = @@
 
   let l:exclude_flags = " . --exclude-dir=blaze-\\* --exclude=\\*.swp"
-  let l:cmd="grep! -R " . shellescape(g:current_grep_str) . l:exclude_flags
-  let g:grepped_items_list = getqflist()
-  let g:grepped_items_current_index = 0
+  let l:cmd="grep! -R " . shellescape(s:current_grep_str) . l:exclude_flags
   silent execute l:cmd
   redraw!
   botright copen
   silent execute l:current_buffer . "wincmd w"
 
+  let s:grepped_items_list = getqflist()
 
   let l:filenames = {}
-  for item in g:grepped_items_list
+  for item in s:grepped_items_list
     let l:filenames[bufname(item['bufnr'])] = 1
   endfor
 
   let l:filenames_list = keys(l:filenames)
 
+  redraw!
   echohl ModeMsg
-  echom "Grepped: '" . g:current_grep_str . "' (" .
-        \ len(g:grepped_items_list) . "X, " .
+  echom "Grepped: '" . s:current_grep_str . "' (" .
+        \ len(s:grepped_items_list) . "X, " .
         \ len(l:filenames_list) . " file(s))"
   echohl None
 endfunction
 
-function! GrepHasRun()
-  if !exists("g:current_grep_str")
+function! s:GrepHasRun()
+  if !exists("s:current_grep_str")
     return 0
-  elseif !exists("g:grepped_items_list")
+  elseif !exists("s:grepped_items_list")
     return 0
-  elseif len(g:grepped_items_list) == 0
+  elseif len(s:grepped_items_list) == 0
     return 0
   endif
   return 1
 endfunction
 
-function! MyGrepReplace()
-  if !GrepHasRun()
+function! s:MyGrepReplace()
+  if !<SID>GrepHasRun()
     return
   endif
 
-  if !exists("g:new_grep_string")
-    call SetNewGrepString()
+  if !exists("s:new_grep_str")
+    call <SID>SetNewGrepString()
   endif
-  let l:cmd= "s/" . g:current_grep_str. "/" . g:new_grep_string . "/gce"
+  let l:cmd= "s/" . s:current_grep_str. "/" . s:new_grep_str . "/gce"
   execute l:cmd
 endfunction
 
-function! SetNewGrepString()
-  echohl ModeMsg | echom "Replace " . g:current_grep_str . " with ?"
+function! s:SetNewGrepString()
   " TODO: Custom completion?
-  echohl Search
-  let g:new_grep_string = input(">>")
+  echohl ModeMsg
+  let s:new_grep_str = input("Replace " . s:current_grep_str . " with? >>")
   echohl None
 endfunction
 
